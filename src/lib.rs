@@ -1,5 +1,5 @@
 use error::Error;
-use message::{Message, MessageContent};
+use message::{GenerateOk, Message, MessageContent};
 
 use crate::message::{Echo, MessageBody};
 
@@ -21,24 +21,34 @@ fn respond_to(node_id: &str, message: &Message, content: MessageContent) -> Resu
 }
 
 pub fn run() -> Result<(), Error> {
-    //let mut node_id: Option<&str> = None;
+    let mut node_id = String::new();
+    let mut id_counter: u64 = 0;
     for line_result in std::io::stdin().lines() {
         let line = line_result?;
         let input_message: Message = serde_json::from_str(&line)?;
 
         match &input_message.body.body {
-            MessageContent::Init(_init) => {
-                //node_id = Some(init.node_id.clone());
-                respond_to(input_message.dest, &input_message, MessageContent::InitOk)?;
+            MessageContent::Init(init) => {
+                node_id = init.node_id.to_string();
+                respond_to(&node_id, &input_message, MessageContent::InitOk)?;
             }
             MessageContent::Echo(echo) => {
                 respond_to(
-                    input_message.dest,
+                    &node_id,
                     &input_message,
                     MessageContent::EchoOk(Echo { echo: echo.echo }),
                 )?;
             }
-            MessageContent::Generate => {}
+            MessageContent::Generate => {
+                respond_to(
+                    &node_id,
+                    &input_message,
+                    MessageContent::GenerateOk(GenerateOk {
+                        id: &format!("{}{}", node_id, id_counter),
+                    }),
+                )?;
+                id_counter += 1;
+            }
             _ => {
                 return Err(Error::InputError(format!(
                     "Invalid input: {:?}",
