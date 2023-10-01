@@ -1,116 +1,102 @@
-use std::io::StdinLock;
-
 use serde::{Deserialize, Serialize};
-use serde_json::from_reader;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct Init<'a> {
+    node_id: &'a str,
+    node_ids: Vec<&'a str>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct Echo<'a> {
+    echo: &'a str,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 enum MessageContent<'a> {
-    Init {
-        node_id: &'a str,
-        node_ids: Vec<&'a str>,
-    },
+    #[serde(borrow)]
+    Init(Init<'a>),
     InitOk,
+    Echo(Echo<'a>),
+    EchoOk(Echo<'a>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct MessageBody<'a> {
     msg_id: Option<i32>,
     in_reply_to: Option<i32>,
     #[serde(flatten)]
+    #[serde(borrow)]
     body: MessageContent<'a>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Message<'a> {
     src: &'a str,
     dest: &'a str,
     body: MessageBody<'a>,
 }
 
-trait Publisher {
-    fn publish(&self, message: &Message<'_>);
+#[derive(Debug)]
+pub enum Error {
+    InputError(String),
+    InvalidMessage(String),
 }
 
-struct JsonSender;
-
-impl Publisher for JsonSender {
-    fn publish(&self, message: &Message) {
-        let str_val = serde_json::to_string(message).unwrap();
-        println!("{}", str_val)
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Error::InputError(value.to_string())
     }
 }
 
-struct Node<P: Publisher> {
-    node_id: Option<String>,
-    send_message: P,
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Error::InputError(value.to_string())
+    }
 }
 
-impl<P: Publisher> Node<P> {
-    fn new(sender: P) -> Self {
-        Node {
-            node_id: None,
-            send_message: sender,
-        }
-    }
+pub fn run() -> Result<(), Error> {
+    for line in std::io::stdin().lines() {
+        let line_thing = &line?;
+        let input_message: Message = serde_json::from_str(line_thing)?;
 
-    fn handle_message(&mut self, message: Message) {
-        let content: Option<MessageContent> = match message.body.body {
-            MessageContent::Init {
-                node_id,
-                node_ids: _,
-            } => {
-                self.node_id = Some(node_id.to_string());
-                Some(MessageContent::InitOk)
+        match input_message.body.body {
+            MessageContent::Init(init) => {
+                let response = Message {
+                    src: input_message.dest,
+                    dest: input_message.src,
+                    body: MessageBody {
+                        msg_id: None,
+                        in_reply_to: input_message.body.msg_id,
+                        body: MessageContent::InitOk,
+                    },
+                };
+                println!("{}", serde_json::to_string(&response)?);
+                eprintln!("{:?}", init)
             }
-            MessageContent::InitOk => {
-                eprintln!("Why did i receive init ok?");
-                None
+            MessageContent::Echo(echo) => {
+                let response = Message {
+                    src: input_message.dest,
+                    dest: input_message.src,
+                    body: MessageBody {
+                        msg_id: Some(1),
+                        in_reply_to: input_message.body.msg_id,
+                        body: MessageContent::EchoOk(Echo { echo: echo.echo }),
+                    },
+                };
+                println!("{}", serde_json::to_string(&response)?);
+                eprintln!("{:?}", echo)
             }
-        };
-        if let Some(response) = content {
-            self.respond_message(&message, response);
+            _ => {
+                return Err(Error::InputError(format!(
+                    "Invalid input: {:?}",
+                    input_message
+                )))
+            }
         }
     }
-
-    fn respond_message(&self, origin: &Message, message_content: MessageContent) {
-        self.send_message.publish(&Message {
-            src: &self.node_id.unwrap(),
-            dest: origin.src.clone(),
-            body: MessageBody {
-                msg_id: None,
-                in_reply_to: origin.body.msg_id,
-                body: message_content,
-            },
-        })
-    }
-}
-
-struct CollectPublisher<'a, 'b: 'a> {
-    published_messages: Vec<&'a Message<'b>>,
-}
-
-impl CollectPublisher<'_, '_> {
-    fn new() -> Self {
-        CollectPublisher {
-            published_messages: Vec::new(),
-        }
-    }
-}
-
-impl<'a, 'b> Publisher for &mut CollectPublisher<'a, 'b> {
-    fn publish(&self, message: &Message) {
-        self.published_messages.push(message);
-    }
-}
-
-pub fn run() {
-    let mut node = Node::new(JsonSender);
-    loop {
-        let message = from_reader::<StdinLock, Message>(std::io::stdin().lock()).unwrap();
-        node.handle_message(message);
-    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -118,31 +104,26 @@ mod test {
     use super::*;
 
     #[test]
-    fn verify_init() {
+    fn serde() {
         // Given
-        let mut publisher = CollectPublisher::new();
-        let mut node = Node::new(&mut publisher);
-
-        let node_id = "n2".to_string();
-
-        let message = Message {
-            src: "n1".to_string(),
-            dest: "n2".to_string(),
+        let msg = Message {
+            src: "n1",
+            dest: "n2",
             body: MessageBody {
                 msg_id: Some(1),
-                in_reply_to: None,
-                body: MessageContent::Init {
-                    node_id: node_id.clone(),
-                    node_ids: vec!["n1".to_string(), "n2".to_string()],
-                },
+                in_reply_to: Some(2),
+                body: MessageContent::Init(Init {
+                    node_id: "n2",
+                    node_ids: vec!["n1", "n2"],
+                }),
             },
         };
-        // When
-        node.handle_message(message);
+
+        // When deserialize and serialize
+        let ser = serde_json::to_string(&msg).unwrap();
+        let de: Message = serde_json::from_str(&ser).unwrap();
 
         // Then
-        assert_eq!(node.node_id, Some(node_id));
-        assert_eq!(publisher.published_messages.len(), 1);
+        assert_eq!(msg, de);
     }
 }
-//oops

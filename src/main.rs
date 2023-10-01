@@ -1,5 +1,5 @@
-use flyio::run;
+use flyio::{run, Error};
 
-fn main() {
-    run();
+fn main() -> Result<(), Error> {
+    run()
 }
