@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use error::Error;
-use message::{GenerateOk, Message, MessageContent};
+use message::{GenerateOk, Message, MessageContent, ReadOk};
 
 use crate::message::{Echo, MessageBody};
 
@@ -23,6 +25,7 @@ fn respond_to(node_id: &str, message: &Message, content: MessageContent) -> Resu
 pub fn run() -> Result<(), Error> {
     let mut node_id = String::new();
     let mut id_counter: u64 = 0;
+    let mut messages: HashSet<i32> = HashSet::new();
     for line_result in std::io::stdin().lines() {
         let line = line_result?;
         let input_message: Message = serde_json::from_str(&line)?;
@@ -48,6 +51,22 @@ pub fn run() -> Result<(), Error> {
                     }),
                 )?;
                 id_counter += 1;
+            }
+            MessageContent::Broadcast(broadcast) => {
+                messages.insert(broadcast.message);
+                respond_to(&node_id, &input_message, MessageContent::BroadcastOk)?;
+            }
+            MessageContent::Read => {
+                respond_to(
+                    &node_id,
+                    &input_message,
+                    MessageContent::ReadOk(ReadOk {
+                        messages: messages.iter().map(|i| *i).collect(),
+                    }),
+                )?;
+            }
+            MessageContent::Topology(_) => {
+                respond_to(&node_id, &input_message, MessageContent::TopologyOk)?;
             }
             _ => {
                 return Err(Error::InputError(format!(

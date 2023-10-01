@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -17,6 +19,22 @@ pub struct GenerateOk<'a> {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Broadcast {
+    pub message: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ReadOk {
+    pub messages: Vec<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Topology<'a> {
+    #[serde(borrow)]
+    pub topology: HashMap<&'a str, Vec<&'a str>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum MessageContent<'a> {
@@ -27,6 +45,12 @@ pub enum MessageContent<'a> {
     EchoOk(Echo<'a>),
     Generate,
     GenerateOk(GenerateOk<'a>),
+    Broadcast(Broadcast),
+    BroadcastOk,
+    Read,
+    ReadOk(ReadOk),
+    Topology(Topology<'a>),
+    TopologyOk,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
