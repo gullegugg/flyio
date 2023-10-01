@@ -29,13 +29,13 @@ struct Message<'a> {
     body: MessageBody<'a>,
 }
 
-trait Publisher<'a> {
-    fn publish(&self, message: &Message<'a>);
+trait Publisher {
+    fn publish(&self, message: &Message<'_>);
 }
 
 struct JsonSender;
 
-impl Publisher<'_> for JsonSender {
+impl Publisher for JsonSender {
     fn publish(&self, message: &Message) {
         let str_val = serde_json::to_string(message).unwrap();
         println!("{}", str_val)
@@ -87,11 +87,11 @@ impl<P: Publisher> Node<P> {
     }
 }
 
-struct CollectPublisher<'a> {
-    published_messages: Vec<&'a Message>,
+struct CollectPublisher<'a, 'b: 'a> {
+    published_messages: Vec<&'a Message<'b>>,
 }
 
-impl CollectPublisher<'_> {
+impl CollectPublisher<'_, '_> {
     fn new() -> Self {
         CollectPublisher {
             published_messages: Vec::new(),
@@ -99,8 +99,8 @@ impl CollectPublisher<'_> {
     }
 }
 
-impl<'a> Publisher<'a> for &mut CollectPublisher<'a> {
-    fn publish(&self, message: &Message<'a>) {
+impl<'a, 'b> Publisher for &mut CollectPublisher<'a, 'b> {
+    fn publish(&self, message: &Message) {
         self.published_messages.push(message);
     }
 }
