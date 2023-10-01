@@ -78,3 +78,21 @@ pub fn run() -> Result<(), Error> {
     }
     Ok(())
 }
+
+/*
+Topology.
+
+Dumb idea:
+
+Store values and store what nodes it has received them from.
+Then on incoming message simply send it forward to all nodes it has not gotten it from yet.
+
+n1, n2, n3
+
+? -> n1;
+n1 -> n2;
+n1 -> n3;
+n2 -> n3;
+n3 -> n2;
+
+*/
