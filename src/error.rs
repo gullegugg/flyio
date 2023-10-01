@@ -2,6 +2,7 @@
 pub enum Error {
     InputError(String),
     InvalidMessage(String),
+    NoNodeId,
 }
 
 impl From<std::io::Error> for Error {

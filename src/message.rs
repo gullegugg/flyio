@@ -12,6 +12,11 @@ pub struct Echo<'a> {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct GenerateOk<'a> {
+    pub id: &'a str,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum MessageContent<'a> {
@@ -20,6 +25,8 @@ pub enum MessageContent<'a> {
     InitOk,
     Echo(Echo<'a>),
     EchoOk(Echo<'a>),
+    Generate,
+    GenerateOk(GenerateOk<'a>),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

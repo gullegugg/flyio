@@ -6,36 +6,39 @@ use crate::message::{Echo, MessageBody};
 pub mod error;
 mod message;
 
+fn respond_to(node_id: &str, message: &Message, content: MessageContent) -> Result<(), Error> {
+    let response = Message {
+        src: node_id,
+        dest: message.src,
+        body: MessageBody {
+            msg_id: Some(1),
+            in_reply_to: message.body.msg_id,
+            body: content,
+        },
+    };
+    println!("{}", serde_json::to_string(&response)?);
+    Ok(())
+}
+
 pub fn run() -> Result<(), Error> {
+    //let mut node_id: Option<&str> = None;
     for line_result in std::io::stdin().lines() {
         let line = line_result?;
         let input_message: Message = serde_json::from_str(&line)?;
 
-        match input_message.body.body {
+        match &input_message.body.body {
             MessageContent::Init(_init) => {
-                let response = Message {
-                    src: input_message.dest,
-                    dest: input_message.src,
-                    body: MessageBody {
-                        msg_id: None,
-                        in_reply_to: input_message.body.msg_id,
-                        body: MessageContent::InitOk,
-                    },
-                };
-                println!("{}", serde_json::to_string(&response)?);
+                //node_id = Some(init.node_id.clone());
+                respond_to(input_message.dest, &input_message, MessageContent::InitOk)?;
             }
             MessageContent::Echo(echo) => {
-                let response = Message {
-                    src: input_message.dest,
-                    dest: input_message.src,
-                    body: MessageBody {
-                        msg_id: Some(1),
-                        in_reply_to: input_message.body.msg_id,
-                        body: MessageContent::EchoOk(Echo { echo: echo.echo }),
-                    },
-                };
-                println!("{}", serde_json::to_string(&response)?);
+                respond_to(
+                    input_message.dest,
+                    &input_message,
+                    MessageContent::EchoOk(Echo { echo: echo.echo }),
+                )?;
             }
+            MessageContent::Generate => {}
             _ => {
                 return Err(Error::InputError(format!(
                     "Invalid input: {:?}",
